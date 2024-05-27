@@ -108,6 +108,36 @@ def process_country_compliance(partner_id, country_id):
     return geojson
 
 
+# @app.post("/eudr/intersect_partner")
+# async def intersect_partner(request: Request, partner_request: PartnerRequest):
+#     geojson = {}
+#     partner_id = partner_request.partner_id
+
+#     cur.execute("SELECT * FROM ktv_dash_eudr_summ_dtl_p0g WHERE partner_id = %s", (partner_id,))
+#     results_redshift = cur.fetchall()
+
+#     if results_redshift:
+#         store_compliance(results_redshift, partner_id)
+
+#         geojson[partner_id] = {'data_redshift': [len(results_redshift)]}
+
+#         cur.execute("SELECT partner_name FROM gis_int_eudr_catalog WHERE partner_id = %s", (partner_id,))
+#         partner_name = cur.fetchone()['partner_name'] if cur.rowcount > 0 else ''
+#         geojson[partner_id]['partner_name'] = [partner_name]
+
+#         cur.execute("SELECT DISTINCT country_id FROM gis_int_eudr_compliance WHERE partner_id = %s AND is_processed = 0", (partner_id,))
+#         country_ids = [row['country_id'] for row in cur.fetchall()]
+
+#         for country_id in country_ids:
+#             geojson.update(process_country_compliance(partner_id, country_id))
+#     else:
+#         geojson[partner_id] = {'data_redshift': [0], 'partner_name': ['']}
+
+#     cur.execute("UPDATE gis_int_eudr_compliance SET is_processed = 1 WHERE partner_id = %s AND is_processed = 0", (partner_id,))
+#     conn.commit()
+
+#     return geojson
+
 @app.post("/eudr/intersect_partner")
 async def intersect_partner(request: Request, partner_request: PartnerRequest):
     geojson = {}
@@ -119,7 +149,7 @@ async def intersect_partner(request: Request, partner_request: PartnerRequest):
     if results_redshift:
         store_compliance(results_redshift, partner_id)
 
-        geojson[partner_id] = {'data_redshift': [len(results_redshift)]}
+        geojson[partner_id] = {'data_redshift': [len(results_redshift)]}  # Check for empty results_redshift
 
         cur.execute("SELECT partner_name FROM gis_int_eudr_catalog WHERE partner_id = %s", (partner_id,))
         partner_name = cur.fetchone()['partner_name'] if cur.rowcount > 0 else ''
@@ -129,7 +159,12 @@ async def intersect_partner(request: Request, partner_request: PartnerRequest):
         country_ids = [row['country_id'] for row in cur.fetchall()]
 
         for country_id in country_ids:
-            geojson.update(process_country_compliance(partner_id, country_id))
+            try:
+                geojson.update(process_country_compliance(partner_id, country_id))
+            except IndexError:
+                # Handle the case where compliance_config[country_id] might be empty
+                pass  # Or log an error message
+
     else:
         geojson[partner_id] = {'data_redshift': [0], 'partner_name': ['']}
 
@@ -137,6 +172,7 @@ async def intersect_partner(request: Request, partner_request: PartnerRequest):
     conn.commit()
 
     return geojson
+
 
 @app.post("/eudr/catalog")
 async def get_catalog(request: Request, eudr_request: PartnerRequest):
